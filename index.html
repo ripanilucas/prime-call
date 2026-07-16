@@ -194,10 +194,25 @@ function logLine(who, text) {
 }
 
 // ---- Gemini Live via WebSocket ----
+// Tokens efêmeros conectam no endpoint "Constrained" (v1alpha). Mantemos o
+// endpoint padrão como fallback, caso o Google mude o roteamento de novo.
+const WS_ENDPOINTS = [
+  `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(cfg?.t || "")}`,
+  `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?access_token=${encodeURIComponent(cfg?.t || "")}`,
+];
+let wsAttempt = 0;
+let setupOk = false;
+
 async function connect() {
   if (!cfg?.t) return;
-  setStatus("Conectando…");
-  ws = new WebSocket(`wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?access_token=${encodeURIComponent(cfg.t)}`);
+  if (wsAttempt >= WS_ENDPOINTS.length) {
+    $("err").textContent = "Não consegui conectar. O link pode ter expirado (30 min) — peça um novo pelo bot.";
+    setStatus("Falha na conexão");
+    return;
+  }
+  setStatus(wsAttempt === 0 ? "Conectando…" : "Tentando rota alternativa…");
+  setupOk = false;
+  ws = new WebSocket(WS_ENDPOINTS[wsAttempt]);
   ws.onopen = () => {
     ws.send(JSON.stringify({
       setup: {
@@ -214,7 +229,7 @@ async function connect() {
   };
   ws.onmessage = async (ev) => {
     const data = ev.data instanceof Blob ? JSON.parse(await ev.data.text()) : JSON.parse(ev.data);
-    if (data.setupComplete) { await startMic(); return; }
+    if (data.setupComplete) { setupOk = true; await startMic(); return; }
     const sc = data.serverContent;
     if (!sc) return;
     if (sc.inputTranscription?.text) pendIn += sc.inputTranscription.text;
@@ -228,8 +243,11 @@ async function connect() {
     }
     if (sc.interrupted) { playCtx?.close(); playCtx = null; playTime = 0; }
   };
-  ws.onerror = () => { $("err").textContent = "Erro na conexão. O link pode ter expirado (30 min)."; stopAll(); };
-  ws.onclose = () => { if (live) stopAll(); };
+  ws.onerror = () => { /* o onclose decide se tenta a próxima rota */ };
+  ws.onclose = () => {
+    if (!setupOk && !live) { wsAttempt++; ws = null; connect(); return; }
+    if (live) stopAll();
+  };
 }
 
 // ---- Captura do microfone (PCM16 @16 kHz) ----
