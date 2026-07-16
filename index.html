@@ -1,46 +1,87 @@
-const BASE = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
+import { readFileSync } from "node:fs";
 
-export async function sendMessage(text, opts = {}) {
-  const res = await fetch(`${BASE}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: process.env.TELEGRAM_CHAT_ID,
-      text,
-      parse_mode: "HTML",
-      disable_web_page_preview: true,
-      ...opts,
-    }),
-  });
-  const data = await res.json();
-  if (!data.ok) throw new Error(`Telegram sendMessage: ${JSON.stringify(data)}`);
-  return data.result;
-}
+const KEY = () => process.env.GEMINI_API_KEY;
+const MODEL_TEXT = "gemini-2.5-flash";
+// Confira o modelo Live vigente em ai.google.dev antes do primeiro uso:
+export const MODEL_LIVE = "models/gemini-2.5-flash-native-audio-preview-12-2025";
 
-export async function getUpdates(offset) {
-  const res = await fetch(`${BASE}/getUpdates?timeout=0&offset=${offset}`);
-  const data = await res.json();
-  if (!data.ok) throw new Error(`Telegram getUpdates: ${JSON.stringify(data)}`);
-  return data.result;
-}
+const schema = JSON.parse(readFileSync(new URL("../schema.json", import.meta.url), "utf8"));
 
-// Baixa um arquivo (ex.: nota de voz .oga) e devolve um Buffer
-export async function downloadFile(fileId) {
-  const meta = await fetch(`${BASE}/getFile?file_id=${fileId}`).then(r => r.json());
-  if (!meta.ok) throw new Error(`Telegram getFile: ${JSON.stringify(meta)}`);
-  const url = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${meta.result.file_path}`;
-  const buf = await fetch(url).then(r => r.arrayBuffer());
-  return { buffer: Buffer.from(buf), path: meta.result.file_path };
-}
+// ---- Extração estruturada (transcript -> JSON de negócios) ----
+export async function extractDeals(transcript, context = "") {
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+  const hojeExt = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo", weekday: "long", day: "numeric", month: "long", year: "numeric",
+  }).format(new Date());
 
-// Apaga uma mensagem do chat (usado para limpar os transcripts crus).
-// O bot só consegue apagar mensagens enviadas por ele mesmo.
-export async function deleteMessage(messageId) {
-  try {
-    await fetch(`${BASE}/deleteMessage`, {
+  const prompt = `Você é o assistente de um assessor de investimentos brasileiro.
+A seguir está a transcrição do fechamento do dia dele (ou uma nota de voz sobre uma reunião).
+Extraia CADA negócio/cliente mencionado como um objeto do array "deals", seguindo o schema.
+
+HOJE é ${hojeExt} (${hoje}). Resolva TODAS as datas relativas a partir de hoje.
+Regras de data (sempre devolva "followup_em" no formato AAAA-MM-DD):
+- "terça que vem", "semana que vem", "amanhã", "daqui a X dias" → calcule a partir de HOJE.
+- "início/começo de <mês>" → primeiro dia ÚTIL do mês (pule sábado/domingo).
+- "meio de <mês>" → dia 15, ou o próximo dia útil.
+- "fim/final de <mês>" → último dia útil do mês.
+- "segunda semana de <mês>" → segunda-feira da segunda semana (ou próximo dia útil).
+- Se realmente não der para determinar, use null.
+
+Demais regras:
+- "cliente": nome da pessoa ou empresa como mencionado.
+- "etapa": uma de: Mapeado | Em conversa | Proposta | Fechado | Perdido.
+- "temperatura": fria | morna | quente.
+- "resumo": 1-2 frases objetivas do que aconteceu.
+- "proximo_passo": ação concreta, ou null.
+- Ignore trechos truncados/sem sentido (ex.: números soltos como "14 14 1").
+- Se nada de negócios foi mencionado, devolva {"deals": []}.
+${context ? `\nContexto (agenda do dia):\n${context}` : ""}
+
+Transcrição:
+"""${transcript}"""`;
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_TEXT}:generateContent?key=${KEY()}`,
+    {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: process.env.TELEGRAM_CHAT_ID, message_id: messageId }),
-    });
-  } catch { /* silencioso: apagar é best-effort */ }
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: schema,
+          temperature: 0.2,
+        },
+      }),
+    }
+  );
+  if (!res.ok) throw new Error(`Gemini extract: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '{"deals":[]}';
+  return JSON.parse(text);
+}
+
+// ---- Token efêmero para a web call (Live API, v1alpha) ----
+// Gera um token de uso único, válido por 30 min, que vai no fragmento da URL.
+// Assim a sua GEMINI_API_KEY nunca aparece na página pública do GitHub Pages.
+export async function createEphemeralToken() {
+  const now = Date.now();
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1alpha/auth_tokens?key=${KEY()}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        uses: 1,
+        expireTime: new Date(now + 30 * 60 * 1000).toISOString(),
+        newSessionExpireTime: new Date(now + 25 * 60 * 1000).toISOString(),
+        // Nota: sem constraints, a configuração da sessão vem do setup enviado
+        // pelo navegador. Aceitável no piloto solo: o token é de uso único,
+        // expira em 30 min e só circula no seu chat privado do Telegram.
+      }),
+    }
+  );
+  if (!res.ok) throw new Error(`Gemini auth_tokens: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return data.name; // formato: auth_tokens/xxxx
 }
