@@ -1,374 +1,46 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="noindex, nofollow">
-<title>Fechamento do dia</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Instrument+Sans:wght@400;500&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg: #0E1512;        /* verde-carvão: fim de expediente */
-    --panel: #141D19;
-    --line: #26332D;
-    --text: #EDE8DA;      /* creme quente */
-    --muted: #8A9A8F;
-    --gold: #D9A441;      /* o sino de fechamento */
-    --gold-dim: #8A6A2B;
-    --live: #5DCAA5;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: "Instrument Sans", system-ui, sans-serif;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 32px 20px 60px;
-  }
-  .wrap { width: 100%; max-width: 560px; }
-  header { text-align: center; margin-bottom: 28px; }
-  .eyebrow {
-    font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
-    color: var(--gold); margin-bottom: 10px;
-  }
-  h1 {
-    font-family: "Fraunces", serif; font-weight: 500; font-size: 34px;
-    letter-spacing: -0.01em;
-  }
-  .date { color: var(--muted); font-size: 14px; margin-top: 6px; }
+const BASE = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
 
-  /* ---- O orbe de voz: assinatura da página ---- */
-  .orb-zone { display: flex; flex-direction: column; align-items: center; margin: 34px 0 26px; }
-  .orb {
-    width: 128px; height: 128px; border-radius: 50%;
-    border: 1px solid var(--gold-dim);
-    background: radial-gradient(circle at 50% 42%, #1D2A23 0%, #121B16 70%);
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer; position: relative; transition: border-color .3s;
-  }
-  .orb:hover { border-color: var(--gold); }
-  .orb .dot {
-    width: 14px; height: 14px; border-radius: 50%;
-    background: var(--gold); transition: transform .15s ease;
-  }
-  @media (prefers-reduced-motion: no-preference) {
-    .orb.live { animation: breathe 2.4s ease-in-out infinite; border-color: var(--live); }
-    @keyframes breathe {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(93, 202, 165, 0.18); }
-      50% { box-shadow: 0 0 0 22px rgba(93, 202, 165, 0); }
-    }
-  }
-  .orb.live .dot { background: var(--live); }
-  .status { margin-top: 14px; font-size: 14px; color: var(--muted); min-height: 20px; text-align: center; }
-
-  /* ---- Pauta ---- */
-  .card {
-    background: var(--panel); border: 1px solid var(--line);
-    border-radius: 14px; padding: 18px 20px; margin-bottom: 16px;
-  }
-  .card h2 {
-    font-family: "Fraunces", serif; font-weight: 500; font-size: 17px;
-    margin-bottom: 12px; color: var(--text);
-  }
-  .item { display: flex; gap: 10px; padding: 7px 0; font-size: 14.5px; line-height: 1.45; }
-  .item + .item { border-top: 1px solid var(--line); }
-  .item .when { color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .item .tag { color: var(--muted); font-size: 12.5px; }
-
-  /* ---- Transcript ---- */
-  #log { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
-  #log .voce { color: var(--text); }
-  #log .agente { color: var(--muted); }
-  #log b { font-weight: 500; color: var(--gold); }
-
-  /* ---- Ações ---- */
-  .actions { display: flex; gap: 10px; margin-top: 8px; }
-  button.act {
-    flex: 1; padding: 13px 16px; border-radius: 10px; font-size: 15px;
-    font-family: inherit; cursor: pointer; border: 1px solid var(--line);
-    background: var(--panel); color: var(--text); transition: border-color .2s;
-  }
-  button.act:hover { border-color: var(--gold-dim); }
-  button.act.primary { background: var(--gold); border-color: var(--gold); color: #1A1408; font-weight: 500; }
-  button.act:disabled { opacity: .45; cursor: default; }
-  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-  .hint { color: var(--muted); font-size: 12.5px; text-align: center; margin-top: 14px; line-height: 1.5; }
-  .error { color: #F09595; font-size: 13.5px; text-align: center; margin-top: 10px; }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <header>
-    <div class="eyebrow">Ritual diário</div>
-    <h1>Fechamento do dia</h1>
-    <div class="date" id="date"></div>
-  </header>
-
-  <div class="orb-zone">
-    <div class="orb" id="orb" role="button" tabindex="0" aria-label="Iniciar ou pausar a conversa"><div class="dot"></div></div>
-    <div class="status" id="status">Toque no orbe para começar</div>
-    <div class="error" id="err"></div>
-  </div>
-
-  <div class="card" id="agendaCard" hidden>
-    <h2>Pauta de hoje</h2>
-    <div id="agenda"></div>
-  </div>
-
-  <div class="card" id="logCard" hidden>
-    <h2>Conversa</h2>
-    <div id="log"></div>
-  </div>
-
-  <div class="actions">
-    <button class="act primary" id="endBtn" disabled>Encerrar e enviar resumo</button>
-    <button class="act" id="copyBtn" disabled>Copiar transcript</button>
-  </div>
-  <div class="hint">Ao encerrar, o transcript vai para o seu Telegram e o bot atualiza o Trello em até 15 minutos.</div>
-</div>
-
-<script>
-// ============================================================
-// Payload vem no fragmento da URL: #d=<base64url do JSON>
-// { t: token efêmero Gemini, m: modelo, a: agenda, bt/bc: telegram }
-// O fragmento nunca é enviado a servidor algum.
-// ============================================================
-let cfg = null;
-try {
-  const raw = new URLSearchParams(location.hash.slice(1)).get("d");
-  cfg = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(raw.replace(/-/g,"+").replace(/_/g,"/")), c => c.charCodeAt(0))));
-} catch (e) {
-  document.getElementById("err").textContent = "Link inválido ou expirado. Peça um novo pelo bot no Telegram.";
-}
-
-const $ = id => document.getElementById(id);
-$("date").textContent = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
-
-// ---- Renderiza a pauta ----
-if (cfg?.a) {
-  const box = $("agenda");
-  (cfg.a.reunioes || []).forEach(r => {
-    const d = document.createElement("div"); d.className = "item";
-    d.innerHTML = `<span class="when">${r.hora}</span><span>${r.titulo}</span>`;
-    box.appendChild(d);
+export async function sendMessage(text, opts = {}) {
+  const res = await fetch(`${BASE}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: process.env.TELEGRAM_CHAT_ID,
+      text,
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+      ...opts,
+    }),
   });
-  (cfg.a.followups || []).forEach(f => {
-    const d = document.createElement("div"); d.className = "item";
-    d.innerHTML = `<span class="when">↻</span><span>${f.nome} <span class="tag">follow-up · ${f.etapa}</span></span>`;
-    box.appendChild(d);
-  });
-  if (box.children.length) $("agendaCard").hidden = false;
+  const data = await res.json();
+  if (!data.ok) throw new Error(`Telegram sendMessage: ${JSON.stringify(data)}`);
+  return data.result;
 }
 
-// ---- Estado ----
-let ws = null, audioCtx = null, micStream = null, workletNode = null;
-let playCtx = null, playTime = 0;
-let live = false;
-const transcript = []; // { who: 'voce'|'agente', text }
-let pendIn = "", pendOut = "";
-
-const SYSTEM = () => `Você é o assistente de fechamento de dia de Lucas, assessor de investimentos brasileiro.
-Fale SEMPRE em português do Brasil, de forma natural, calorosa e objetiva. Frases curtas.
-Sua missão nesta conversa de no máximo 10 minutos:
-1. Passar por cada reunião do dia perguntando: como foi, ficou algum negócio mapeado, próximo passo e quando recontatar.
-2. Perguntar sobre os follow-ups pendentes listados.
-3. Confirmar no final um resumo rápido do que foi mapeado.
-
-IMPORTANTE sobre qualidade de áudio:
-- Se a fala de Lucas vier truncada, sem sentido, ou como número solto (ex.: "14 14 1"), NÃO registre como se fosse informação válida. Peça para ele repetir: "Desculpe, não peguei — pode repetir o próximo passo e a data?".
-- Sempre que houver uma data ou valor, REPITA em voz alta para confirmar: "Então recontato dia 21 de julho, certo?".
-- Uma reunião/follow-up só é dado como resolvido quando você tiver: etapa, temperatura, próximo passo e data (quando fizer sentido). Se faltar algum, pergunte antes de avançar.
-
-Não invente informações. Se Lucas disser que uma reunião não teve relevância comercial, siga adiante.
-Pauta de hoje: ${JSON.stringify(cfg?.a || {})}`;
-
-function setStatus(t) { $("status").textContent = t; }
-function logLine(who, text) {
-  if (!text.trim()) return;
-  transcript.push({ who, text });
-  $("logCard").hidden = false;
-  const d = document.createElement("div");
-  d.className = who;
-  d.innerHTML = `<b>${who === "voce" ? "Você" : "Agente"}</b> — ${text}`;
-  $("log").appendChild(d);
-  d.scrollIntoView({ behavior: "smooth", block: "end" });
+export async function getUpdates(offset) {
+  const res = await fetch(`${BASE}/getUpdates?timeout=0&offset=${offset}`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(`Telegram getUpdates: ${JSON.stringify(data)}`);
+  return data.result;
 }
 
-// ---- Gemini Live via WebSocket ----
-// Tokens efêmeros conectam no endpoint "Constrained" (v1alpha). Mantemos o
-// endpoint padrão como fallback, caso o Google mude o roteamento de novo.
-const WS_ENDPOINTS = [
-  `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${encodeURIComponent(cfg?.t || "")}`,
-  `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?access_token=${encodeURIComponent(cfg?.t || "")}`,
-];
-let wsAttempt = 0;
-let setupOk = false;
-
-async function connect() {
-  if (!cfg?.t) return;
-  if (wsAttempt >= WS_ENDPOINTS.length) {
-    $("err").textContent = "Não consegui conectar. O link pode ter expirado (30 min) — peça um novo pelo bot.";
-    setStatus("Falha na conexão");
-    return;
-  }
-  setStatus(wsAttempt === 0 ? "Conectando…" : "Tentando rota alternativa…");
-  setupOk = false;
-  ws = new WebSocket(WS_ENDPOINTS[wsAttempt]);
-  ws.onopen = () => {
-    ws.send(JSON.stringify({
-      setup: {
-        model: cfg.m,
-        generationConfig: {
-          responseModalities: ["AUDIO"],
-          speechConfig: { languageCode: "pt-BR" },
-        },
-        systemInstruction: { parts: [{ text: SYSTEM() }] },
-        inputAudioTranscription: {},
-        outputAudioTranscription: {},
-      },
-    }));
-  };
-  ws.onmessage = async (ev) => {
-    const data = ev.data instanceof Blob ? JSON.parse(await ev.data.text()) : JSON.parse(ev.data);
-    if (data.setupComplete) { setupOk = true; await startMic(); return; }
-    const sc = data.serverContent;
-    if (!sc) return;
-    if (sc.inputTranscription?.text) pendIn += sc.inputTranscription.text;
-    if (sc.outputTranscription?.text) pendOut += sc.outputTranscription.text;
-    for (const p of sc.modelTurn?.parts || []) {
-      if (p.inlineData?.data) playChunk(p.inlineData.data);
-    }
-    if (sc.turnComplete) {
-      if (pendIn) { logLine("voce", pendIn); pendIn = ""; }
-      if (pendOut) { logLine("agente", pendOut); pendOut = ""; }
-    }
-    if (sc.interrupted) { playCtx?.close(); playCtx = null; playTime = 0; }
-  };
-  ws.onerror = () => { /* o onclose decide se tenta a próxima rota */ };
-  ws.onclose = () => {
-    if (!setupOk && !live) { wsAttempt++; ws = null; connect(); return; }
-    if (live) stopAll();
-  };
+// Baixa um arquivo (ex.: nota de voz .oga) e devolve um Buffer
+export async function downloadFile(fileId) {
+  const meta = await fetch(`${BASE}/getFile?file_id=${fileId}`).then(r => r.json());
+  if (!meta.ok) throw new Error(`Telegram getFile: ${JSON.stringify(meta)}`);
+  const url = `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${meta.result.file_path}`;
+  const buf = await fetch(url).then(r => r.arrayBuffer());
+  return { buffer: Buffer.from(buf), path: meta.result.file_path };
 }
 
-// ---- Captura do microfone (PCM16 @16 kHz) via AudioWorklet ----
-// O ScriptProcessorNode antigo perdia os primeiros ms de cada fala.
-// O AudioWorklet roda em thread de áudio dedicada e captura contínuo.
-const WORKLET_SRC = `
-class PCMCapture extends AudioWorkletProcessor {
-  process(inputs) {
-    const ch = inputs[0][0];
-    if (ch) {
-      const i16 = new Int16Array(ch.length);
-      for (let i = 0; i < ch.length; i++) {
-        const s = Math.max(-1, Math.min(1, ch[i]));
-        i16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-      }
-      this.port.postMessage(i16.buffer, [i16.buffer]);
-    }
-    return true;
-  }
+// Apaga uma mensagem do chat (usado para limpar os transcripts crus).
+// O bot só consegue apagar mensagens enviadas por ele mesmo.
+export async function deleteMessage(messageId) {
+  try {
+    await fetch(`${BASE}/deleteMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: process.env.TELEGRAM_CHAT_ID, message_id: messageId }),
+    });
+  } catch { /* silencioso: apagar é best-effort */ }
 }
-registerProcessor('pcm-capture', PCMCapture);
-`;
-
-function abToB64(buf) {
-  const bytes = new Uint8Array(buf);
-  let bin = "";
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-  return btoa(bin);
-}
-
-async function startMic() {
-  micStream = await navigator.mediaDevices.getUserMedia({
-    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-  });
-  audioCtx = new AudioContext({ sampleRate: 16000 });
-  if (audioCtx.state === "suspended") await audioCtx.resume();
-
-  const blobUrl = URL.createObjectURL(new Blob([WORKLET_SRC], { type: "application/javascript" }));
-  await audioCtx.audioWorklet.addModule(blobUrl);
-  URL.revokeObjectURL(blobUrl);
-
-  const src = audioCtx.createMediaStreamSource(micStream);
-  workletNode = new AudioWorkletNode(audioCtx, "pcm-capture");
-  workletNode.port.onmessage = (e) => {
-    if (!ws || ws.readyState !== 1) return;
-    const b64 = abToB64(e.data);
-    ws.send(JSON.stringify({ realtimeInput: { audio: { data: b64, mimeType: "audio/pcm;rate=16000" } } }));
-  };
-  src.connect(workletNode);
-  // Não conecta ao destino: evita eco do próprio microfone.
-
-  live = true;
-  $("orb").classList.add("live");
-  $("endBtn").disabled = false; $("copyBtn").disabled = false;
-  // Pequeno aquecimento: dá tempo do worklet começar antes de o agente falar.
-  setStatus("Ao vivo — aguarde o cumprimento e então fale");
-}
-
-// ---- Playback da voz do agente (PCM16 @24 kHz) ----
-function playChunk(b64) {
-  if (!playCtx) { playCtx = new AudioContext({ sampleRate: 24000 }); playTime = playCtx.currentTime; }
-  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-  const i16 = new Int16Array(bytes.buffer);
-  const f32 = Float32Array.from(i16, v => v / 0x8000);
-  const buf = playCtx.createBuffer(1, f32.length, 24000);
-  buf.copyToChannel(f32, 0);
-  const node = playCtx.createBufferSource();
-  node.buffer = buf; node.connect(playCtx.destination);
-  playTime = Math.max(playTime, playCtx.currentTime);
-  node.start(playTime);
-  playTime += buf.duration;
-}
-
-function stopAll() {
-  live = false;
-  workletNode?.disconnect(); audioCtx?.close(); micStream?.getTracks().forEach(t => t.stop());
-  ws?.close(); playCtx?.close();
-  $("orb").classList.remove("live");
-  setStatus("Conversa encerrada");
-}
-
-// ---- Encerrar: envia o transcript para o bot no Telegram ----
-function fullTranscript() {
-  return transcript.map(t => `${t.who === "voce" ? "Lucas" : "Agente"}: ${t.text}`).join("\n");
-}
-
-$("endBtn").addEventListener("click", async () => {
-  stopAll();
-  const text = "#call " + fullTranscript();
-  $("endBtn").disabled = true;
-  if (cfg?.bt && cfg?.bc) {
-    try {
-      // Telegram limita mensagens a 4096 chars — fatia se precisar
-      for (let i = 0; i < text.length; i += 3900) {
-        await fetch(`https://api.telegram.org/bot${cfg.bt}/sendMessage`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: cfg.bc, text: (i === 0 ? "" : "#call ") + text.slice(i, i + 3900) }),
-        });
-      }
-      setStatus("Resumo enviado ✓ — o Trello atualiza em até 15 min");
-      return;
-    } catch (e) { /* cai no fallback */ }
-  }
-  await navigator.clipboard.writeText(text);
-  setStatus("Transcript copiado — cole no chat do bot no Telegram");
-});
-
-$("copyBtn").addEventListener("click", async () => {
-  await navigator.clipboard.writeText("#call " + fullTranscript());
-  setStatus("Transcript copiado ✓");
-});
-
-const toggle = () => { if (!live && !ws) connect(); else if (live) stopAll(); };
-$("orb").addEventListener("click", toggle);
-$("orb").addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
-</script>
-</body>
-</html>
