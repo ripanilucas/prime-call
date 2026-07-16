@@ -7,17 +7,21 @@
 <title>Fechamento do dia</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Instrument+Sans:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0E1512;        /* verde-carvão: fim de expediente */
-    --panel: #141D19;
-    --line: #26332D;
-    --text: #EDE8DA;      /* creme quente */
-    --muted: #8A9A8F;
-    --gold: #D9A441;      /* o sino de fechamento */
-    --gold-dim: #8A6A2B;
-    --live: #5DCAA5;
+    --bg: #1F0B20;          /* roxo quase preto (base do Dark Purple) */
+    --panel: #311131;       /* Dark Purple */
+    --panel-2: #3D1A3D;     /* painel elevado */
+    --line: #4A2A4A;
+    --text: #F2E9DC;        /* creme (como os títulos claros da paleta) */
+    --muted: #B79BB4;       /* lilás acinzentado para texto secundário */
+    --red: #EA404D;         /* Desire — ação / gravando */
+    --red-dim: #A32C36;
+    --cerulean: #12447E;    /* Dark Cerulean — estrutura */
+    --persian: #0663AA;     /* Medium Persian Blue */
+    --electric: #0E92D2;    /* Rich Electric Blue — destaques, horários */
+    --lime: #D8E88C;        /* verde-limão dos títulos sobre roxo */
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -28,77 +32,86 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 32px 20px 60px;
+    padding: 30px 18px 56px;
   }
   .wrap { width: 100%; max-width: 560px; }
-  header { text-align: center; margin-bottom: 28px; }
+  header { margin-bottom: 24px; }
   .eyebrow {
-    font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
-    color: var(--gold); margin-bottom: 10px;
+    font-size: 12px; letter-spacing: 0.24em; text-transform: uppercase;
+    color: var(--electric); margin-bottom: 8px; font-weight: 600;
   }
   h1 {
-    font-family: "Fraunces", serif; font-weight: 500; font-size: 34px;
-    letter-spacing: -0.01em;
+    font-family: "Fraunces", serif; font-weight: 700; font-size: 46px;
+    line-height: 0.98; letter-spacing: -0.02em; text-transform: uppercase;
+    color: var(--text);
   }
-  .date { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  .date { color: var(--muted); font-size: 14px; margin-top: 10px; text-transform: capitalize; }
 
   /* ---- O orbe de voz: assinatura da página ---- */
-  .orb-zone { display: flex; flex-direction: column; align-items: center; margin: 34px 0 26px; }
+  .orb-zone { display: flex; flex-direction: column; align-items: center; margin: 30px 0 24px; }
   .orb {
-    width: 128px; height: 128px; border-radius: 50%;
-    border: 1px solid var(--gold-dim);
-    background: radial-gradient(circle at 50% 42%, #1D2A23 0%, #121B16 70%);
+    width: 132px; height: 132px; border-radius: 50%;
+    border: 2px solid var(--electric);
+    background: radial-gradient(circle at 50% 40%, #3D1A3D 0%, #240E24 72%);
     display: flex; align-items: center; justify-content: center;
-    cursor: pointer; position: relative; transition: border-color .3s;
+    cursor: pointer; position: relative; transition: border-color .3s, transform .15s;
   }
-  .orb:hover { border-color: var(--gold); }
+  .orb:hover { transform: scale(1.03); }
   .orb .dot {
-    width: 14px; height: 14px; border-radius: 50%;
-    background: var(--gold); transition: transform .15s ease;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--electric); transition: background .2s;
   }
   @media (prefers-reduced-motion: no-preference) {
-    .orb.live { animation: breathe 2.4s ease-in-out infinite; border-color: var(--live); }
-    @keyframes breathe {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(93, 202, 165, 0.18); }
-      50% { box-shadow: 0 0 0 22px rgba(93, 202, 165, 0); }
+    .orb.live { animation: pulse 2s ease-in-out infinite; border-color: var(--red); }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(234, 64, 77, 0.30); }
+      50% { box-shadow: 0 0 0 24px rgba(234, 64, 77, 0); }
     }
   }
-  .orb.live .dot { background: var(--live); }
-  .status { margin-top: 14px; font-size: 14px; color: var(--muted); min-height: 20px; text-align: center; }
+  .orb.live .dot { background: var(--red); }
+  .status { margin-top: 16px; font-size: 14px; color: var(--muted); min-height: 20px; text-align: center; }
 
-  /* ---- Pauta ---- */
+  /* ---- Cards / Pauta ---- */
   .card {
     background: var(--panel); border: 1px solid var(--line);
-    border-radius: 14px; padding: 18px 20px; margin-bottom: 16px;
+    border-radius: 16px; padding: 18px 20px; margin-bottom: 14px;
   }
   .card h2 {
-    font-family: "Fraunces", serif; font-weight: 500; font-size: 17px;
-    margin-bottom: 12px; color: var(--text);
+    font-family: "Fraunces", serif; font-weight: 600; font-size: 19px;
+    margin-bottom: 12px; color: var(--lime); text-transform: uppercase;
+    letter-spacing: 0.01em;
   }
-  .item { display: flex; gap: 10px; padding: 7px 0; font-size: 14.5px; line-height: 1.45; }
+  .item { display: flex; gap: 12px; padding: 8px 0; font-size: 15px; line-height: 1.45; }
   .item + .item { border-top: 1px solid var(--line); }
-  .item .when { color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .item .when {
+    color: var(--electric); font-weight: 600; font-variant-numeric: tabular-nums;
+    white-space: nowrap; min-width: 46px;
+  }
   .item .tag { color: var(--muted); font-size: 12.5px; }
 
   /* ---- Transcript ---- */
   #log { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
   #log .voce { color: var(--text); }
   #log .agente { color: var(--muted); }
-  #log b { font-weight: 500; color: var(--gold); }
+  #log b { font-weight: 600; color: var(--electric); }
 
   /* ---- Ações ---- */
   .actions { display: flex; gap: 10px; margin-top: 8px; }
   button.act {
-    flex: 1; padding: 13px 16px; border-radius: 10px; font-size: 15px;
-    font-family: inherit; cursor: pointer; border: 1px solid var(--line);
-    background: var(--panel); color: var(--text); transition: border-color .2s;
+    flex: 1; padding: 15px 16px; border-radius: 12px; font-size: 15px;
+    font-family: inherit; font-weight: 600; cursor: pointer;
+    border: 1.5px solid var(--line);
+    background: transparent; color: var(--text); transition: border-color .2s, background .2s;
   }
-  button.act:hover { border-color: var(--gold-dim); }
-  button.act.primary { background: var(--gold); border-color: var(--gold); color: #1A1408; font-weight: 500; }
-  button.act:disabled { opacity: .45; cursor: default; }
-  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  button.act:hover { border-color: var(--electric); }
+  button.act.primary {
+    background: var(--red); border-color: var(--red); color: #fff;
+  }
+  button.act.primary:hover { background: var(--red-dim); border-color: var(--red-dim); }
+  button.act:disabled { opacity: .4; cursor: default; }
+  button:focus-visible { outline: 3px solid var(--electric); outline-offset: 2px; }
   .hint { color: var(--muted); font-size: 12.5px; text-align: center; margin-top: 14px; line-height: 1.5; }
-  .error { color: #F09595; font-size: 13.5px; text-align: center; margin-top: 10px; }
+  .error { color: var(--red); font-size: 13.5px; text-align: center; margin-top: 10px; }
 </style>
 </head>
 <body>
